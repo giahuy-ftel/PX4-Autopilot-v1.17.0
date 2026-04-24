@@ -409,6 +409,11 @@ hrt_call_invoke()
 	struct hrt_call	*call;
 	hrt_abstime deadline;
 
+	// Instrumentation
+	static hrt_abstime last_diag_time = 0;
+	int callouts_fired = 0;
+	hrt_abstime max_lateness = 0;
+
 	hrt_lock();
 
 	while (true) {
@@ -424,6 +429,14 @@ hrt_call_invoke()
 		if (call->deadline > now) {
 			break;
 		}
+
+		hrt_abstime lateness = now - call->deadline;
+
+		if (lateness > max_lateness) {
+			max_lateness = lateness;
+		}
+
+		callouts_fired++;
 
 		sq_rem(&call->link, &callout_queue);
 		//PX4_INFO("call pop");
@@ -465,6 +478,19 @@ hrt_call_invoke()
 	}
 
 	hrt_unlock();
+
+	// Instrumentation: warn when callouts are significantly late
+	if (max_lateness > 10000) { // > 10ms sim time
+		hrt_abstime now = hrt_absolute_time();
+
+		if (now - last_diag_time > 1000000) { // max once per second sim time
+			PX4_WARN("hrt_callout: %d fired, max late=%llums sim_t=%.3fs",
+				 callouts_fired,
+				 (unsigned long long)(max_lateness / 1000),
+				 (double)now / 1e6);
+			last_diag_time = now;
+		}
+	}
 }
 
 int px4_clock_gettime(clockid_t clk_id, struct timespec *tp)
@@ -515,14 +541,7 @@ int px4_usleep(useconds_t usec)
 
 	const uint64_t time_finished = lockstep_scheduler.get_absolute_time() + usec;
 
-	int ret = lockstep_scheduler.usleep_until(time_finished);
-
-	// Yield CPU after lockstep wait returns. At high sim speeds, usleep_until
-	// returns immediately when sim time has already advanced past the target,
-	// causing tight loops that starve external consumers (e.g. MAVSDK on UDP).
-	sched_yield();
-
-	return ret;
+	return lockstep_scheduler.usleep_until(time_finished);
 }
 
 unsigned int px4_sleep(unsigned int seconds)
