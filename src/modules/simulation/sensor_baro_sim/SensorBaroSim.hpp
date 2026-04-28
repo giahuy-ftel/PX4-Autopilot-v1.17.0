@@ -88,6 +88,7 @@ private:
 	float _last_temperature{0.0f};
 
 	hrt_abstime _last_update_time{0};
+	hrt_abstime _last_run_time{0};
 
 	PX4Barometer _px4_baro{6620172}; // 6620172: DRV_BARO_DEVTYPE_BAROSIM, BUS: 1, ADDR: 4, TYPE: SIMULATION
 

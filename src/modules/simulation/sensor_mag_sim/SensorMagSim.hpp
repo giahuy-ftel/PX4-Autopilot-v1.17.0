@@ -91,6 +91,8 @@ private:
 	bool _last_field_valid{false};
 	matrix::Vector3f _last_field{};
 
+	hrt_abstime _last_run_time{0};
+
 	bool _mag_earth_available{false};
 
 	matrix::Vector3f _mag_earth_pred{};
