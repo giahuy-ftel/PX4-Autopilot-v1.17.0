@@ -1,0 +1,548 @@
+<?xml version="1.0" ?>
+<!--
+  uav_tracking.sdf : World mo phong cho phat trien UAV detect / track / follow
+  Gazebo Sim (Garden / Harmonic). Dung duoc cho PX4 SITL (gz) va ArduPilot SITL (ardupilot_gazebo).
+
+  Noi dung:
+  - Bai dap UAV tai goc (0, 0)
+  - 3 walker gan bai dap
+  - 8 xe chay vong tron dong tam quanh asphalt, ban kinh 70..150 m
+  - Nha, cay va thung hang lam boi canh / che khuat
+
+  Luu y: 3 actor can Internet lan dau de tai mesh tu Fuel (fuel.gazebosim.org),
+  xe dung mesh + texture local tai worlds/assets/uav_tracking/vehicles
+-->
+<sdf version="1.9">
+  <world name="uav_tracking">
+
+    <!-- PX4 mac dinh 250 Hz (0.004). Neu dung ArduPilot ma EKF kem on dinh, doi thanh 0.001 -->
+    <physics type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <gravity>0 0 -9.8</gravity>
+    <!-- Tu truong xap xi khu vuc Ha Noi (ENU, Tesla) -->
+    <magnetic_field>-6e-07 4.0e-05 -2.2e-05</magnetic_field>
+    <atmosphere type="adiabatic"/>
+
+    <!-- System plugins: du cho ca PX4 (x500...) va ArduPilot (iris...) -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-magnetometer-system" name="gz::sim::systems::Magnetometer"/>
+    <plugin filename="gz-sim-air-pressure-system" name="gz::sim::systems::AirPressure"/>
+    <plugin filename="gz-sim-air-speed-system" name="gz::sim::systems::AirSpeed"/>
+    <plugin filename="gz-sim-apply-link-wrench-system" name="gz::sim::systems::ApplyLinkWrench"/>
+    <plugin filename="gz-sim-navsat-system" name="gz::sim::systems::NavSat"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <scene>
+      <ambient>0.6 0.6 0.6 1</ambient>
+      <background>0.7 0.85 1.0 1</background>
+      <shadows>true</shadows>
+      <grid>false</grid>
+      <sky/>
+    </scene>
+
+    <!-- Toa do GPS home (Ha Noi). PX4/ArduPilot lay diem nay lam goc NavSat -->
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>21.0060</latitude_deg>
+      <longitude_deg>105.8430</longitude_deg>
+      <elevation>12.0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 60 0 0 0</pose>
+      <diffuse>0.9 0.9 0.85 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.4 0.3 -0.85</direction>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <!-- ============================ MAT DAT ============================ -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>380 380</size></plane></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>380 380</size></plane></geometry>
+          <material>
+            <ambient>0.44 0.50 0.36 1</ambient>
+            <diffuse>0.44 0.50 0.36 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Bai asphalt tron: khu vuc xe chay, tam (15, 0), ban kinh 165 m -->
+    <model name="asphalt_pad">
+      <static>true</static>
+      <pose>15 0 0.02 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><cylinder><radius>165</radius><length>0.04</length></cylinder></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><cylinder><radius>165</radius><length>0.04</length></cylinder></geometry>
+          <material>
+            <ambient>0.15 0.15 0.16 1</ambient>
+            <diffuse>0.15 0.15 0.16 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Vong tron trang tren mat dat: r = 50 + n*10, n = 0..11, tam (15, 0) -->
+    <model name="vehicle_lane_markers">
+      <static>true</static>
+      <pose>15 0 0.075 0 0 0</pose>
+      <link name="link">
+        <visual name="rings">
+          <geometry><mesh><uri>model://uav_tracking_assets/car_lanes.obj</uri></mesh></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Bai cat / ha canh UAV tai goc (0, 0), nang tren asphalt de nhin ro -->
+    <model name="landing_pad">
+      <static>true</static>
+      <pose>0 0 0.07 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <pose>0 0 0.016 0 0 0</pose>
+          <geometry><box><size>3.8 3.8 0.032</size></box></geometry>
+        </collision>
+        <visual name="border">
+          <pose>0 0 0.01 0 0 0</pose>
+          <geometry><box><size>3.8 3.8 0.02</size></box></geometry>
+          <material><ambient>0.90 0.45 0.05 1</ambient><diffuse>0.90 0.45 0.05 1</diffuse></material>
+        </visual>
+        <visual name="center">
+          <pose>0 0 0.022 0 0 0</pose>
+          <geometry><box><size>3.0 3.0 0.02</size></box></geometry>
+          <material><ambient>0.92 0.92 0.92 1</ambient><diffuse>0.92 0.92 0.92 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="walker_path_markers">
+      <static>true</static>
+      <pose>0 0 0.085 0 0 0</pose>
+      <link name="link">
+        <visual name="paths">
+          <geometry><mesh><uri>model://uav_tracking_assets/walker_paths.obj</uri></mesh></geometry>
+          <material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ======================= NGUOI DI BO (ACTORS) ======================= -->
+    <!-- Actor khong co va cham vat ly nhung camera / depth camera thay duoc,
+         phu hop cho detect + tracking. Toc do di bo 1.1 den 1.4 m/s -->
+
+    <!-- Walker 1: di vong chu nhat phia Tay bai dap, ~1.2 m/s -->
+    <actor name="walker_1">
+      <skin>
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walk">
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>0.0</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walk" tension="0.6">
+          <waypoint><time>0.0</time><pose>-4 -8 1.0 0 0 1.5708</pose></waypoint>
+          <waypoint><time>13.3</time><pose>-4 8 1.0 0 0 1.5708</pose></waypoint>
+          <waypoint><time>14.3</time><pose>-4 8 1.0 0 0 3.1416</pose></waypoint>
+          <waypoint><time>19.3</time><pose>-10 8 1.0 0 0 3.1416</pose></waypoint>
+          <waypoint><time>20.3</time><pose>-10 8 1.0 0 0 -1.5708</pose></waypoint>
+          <waypoint><time>33.6</time><pose>-10 -8 1.0 0 0 -1.5708</pose></waypoint>
+          <waypoint><time>34.6</time><pose>-10 -8 1.0 0 0 0</pose></waypoint>
+          <waypoint><time>39.6</time><pose>-4 -8 1.0 0 0 0</pose></waypoint>
+          <waypoint><time>40.6</time><pose>-4 -8 1.0 0 0 1.5708</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+    <!-- Walker 2: di thang qua lai phia Nam bai xe (y = -15), ~1.1 m/s -->
+    <actor name="walker_2">
+      <skin>
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walk">
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>0.0</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walk" tension="0.6">
+          <waypoint><time>0.0</time><pose>2 -15 1.0 0 0 0</pose></waypoint>
+          <waypoint><time>23.6</time><pose>28 -15 1.0 0 0 0</pose></waypoint>
+          <waypoint><time>24.4</time><pose>28 -15 1.0 0 0 1.5708</pose></waypoint>
+          <waypoint><time>25.2</time><pose>28 -15 1.0 0 0 3.1416</pose></waypoint>
+          <waypoint><time>48.8</time><pose>2 -15 1.0 0 0 3.1416</pose></waypoint>
+          <waypoint><time>49.6</time><pose>2 -15 1.0 0 0 4.7124</pose></waypoint>
+          <waypoint><time>50.4</time><pose>2 -15 1.0 0 0 6.2832</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+    <!-- Walker 3: di vong bat giac quanh bai xe (r = 14 m, tam (15,0)), ~1.4 m/s.
+         Muc tieu tot cho bai tap follow lien tuc -->
+    <actor name="walker_3">
+      <skin>
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <scale>1.0</scale>
+      </skin>
+      <animation name="walk">
+        <filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename>
+        <interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop>
+        <delay_start>0.0</delay_start>
+        <auto_start>true</auto_start>
+        <trajectory id="0" type="walk" tension="0.6">
+          <waypoint><time>0.0</time><pose>29.0 0.0 1.0 0 0 1.5708</pose></waypoint>
+          <waypoint><time>7.65</time><pose>24.9 9.9 1.0 0 0 2.3562</pose></waypoint>
+          <waypoint><time>15.3</time><pose>15.0 14.0 1.0 0 0 3.1416</pose></waypoint>
+          <waypoint><time>22.95</time><pose>5.1 9.9 1.0 0 0 3.9270</pose></waypoint>
+          <waypoint><time>30.6</time><pose>1.0 0.0 1.0 0 0 4.7124</pose></waypoint>
+          <waypoint><time>38.25</time><pose>5.1 -9.9 1.0 0 0 5.4978</pose></waypoint>
+          <waypoint><time>45.9</time><pose>15.0 -14.0 1.0 0 0 6.2832</pose></waypoint>
+          <waypoint><time>53.55</time><pose>24.9 -9.9 1.0 0 0 7.0686</pose></waypoint>
+          <waypoint><time>61.2</time><pose>29.0 0.0 1.0 0 0 7.8540</pose></waypoint>
+        </trajectory>
+      </script>
+    </actor>
+
+    <!-- ===================== XE CHAY VONG TRON DONG TAM (v = |omega| x r) ===================== -->
+    <!-- Plugin VelocityControl giu van toc than xe (initial_linear) + toc do quay (initial_angular)
+         nen xe tu chay vong tron vinh vien, khong can node dieu khien ngoai.
+         8 xe dung chung tam (15, 0), chay giua 2 vong trang lien ke.
+         Ban kinh xe: 75, 85, 95, 105, 115, 125, 135, 145 m.
+         Khoang cach giua cac lane la 10 m de xe khong cham nhau ke ca khi nguoc chieu.
+         Doi toc do luc runtime:
+           gz topic -t /model/car_1/cmd_vel -m gz.msgs.Twist -p "linear: {x: 3.0}, angular: {z: 0.5}"
+         Neu mesh xe bi quay ngang (huong mesh khac +X), chinh yaw trong <pose> cua model -->
+
+    <!-- Xe 1: SUV, r = 75 m, giua vong 70 va 80, nguoc kim dong ho, 15 m/s -->
+    <model name="car_1">
+      <pose>90 0 0.05 0 0 1.5708</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="suv_visual">
+          <pose>0 0 0 0 0 -1.5708</pose>
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/suv/meshes/suv.obj</uri>
+              <scale>0.06 0.06 0.06</scale>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 0.2</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- Xe 2: Prius, r = 85 m, giua vong 80 va 90, cung kim dong ho, 15 m/s.
+         Mesh Prius co mui xe theo truc -Y, visual xoay +90 deg de body +X la huong tien. -->
+    <model name="car_2">
+      <pose>-27.5 73.612 0.05 0 0 0.5236</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="prius_visual">
+          <pose>0 0 0 0 0 1.5708</pose>
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/prius_hybrid/meshes/Hybrid.obj</uri>
+              <scale>0.01 0.01 0.01</scale>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 -0.176471</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- Xe 3: Pickup, r = 95 m, giua vong 90 va 100, nguoc kim dong ho, 15 m/s -->
+    <model name="car_3">
+      <pose>-32.5 -82.272 0.05 0 0 -0.5236</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="pickup_visual">
+          <pose>0 0 0 0 0 -1.5708</pose>
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/pickup/meshes/pickup.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 0.157895</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- Xe 4: Van / delivery truck, r = 105 m, giua vong 100 va 110, nguoc kim dong ho, 15 m/s -->
+    <model name="car_4_van">
+      <pose>89.246 74.246 0.05 0 0 2.3562</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="van_visual">
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/truckdelivery/meshes/truck.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 0.142857</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- Xe 5: Truck / fire truck, r = 115 m, giua vong 110 va 120, cung kim dong ho, 15 m/s -->
+    <model name="car_5_truck">
+      <pose>72.5 99.593 0.05 0 0 -0.5236</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="truck_visual">
+          <pose>0 0 0 0 0 -1.5708</pose>
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/fire_truck/meshes/fire_truck.obj</uri>
+              <scale>0.1 0.1 0.1</scale>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 -0.130435</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- Xe 6: Bus, r = 125 m, giua vong 120 va 130, nguoc kim dong ho, 15 m/s -->
+    <model name="car_6_bus">
+      <pose>-47.5 108.253 0.05 0 0 3.6652</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="bus_visual">
+          <pose>0 0 0 0 0 1.5708</pose>
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/bus/meshes/bus.obj</uri>
+              <scale>0.01 0.01 0.01</scale>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 0.12</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- Xe 7: Sedan gan dung bang Hatchback red, r = 135 m, giua vong 130 va 140, cung kim dong ho, 15 m/s -->
+    <model name="car_7_sedan">
+      <pose>-120 0 0.05 0 0 1.5708</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="sedan_visual">
+          <pose>0 0 0 0 0 1.5708</pose>
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/hatchback_red/meshes/hatchback.obj</uri>
+              <scale>0.0254 0.0254 0.0254</scale>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 -0.111111</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- Xe 8: Ambulance, r = 145 m, giua vong 140 va 150, cung kim dong ho, 15 m/s -->
+    <model name="car_8_ambulance">
+      <pose>87.5 -125.574 0.05 0 0 3.6652</pose>
+      <link name="link">
+        <gravity>false</gravity>
+        <inertial><mass>1</mass></inertial>
+        <visual name="ambulance_visual">
+          <pose>0 0 0 0 0 1.5708</pose>
+          <geometry>
+            <mesh>
+              <uri>model://uav_tracking_assets/vehicles/ambulance/meshes/ambulance.obj</uri>
+              <scale>0.0254 0.0254 0.0254</scale>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl">
+        <initial_linear>15.0 0 0</initial_linear>
+        <initial_angular>0 0 -0.103448</initial_angular>
+      </plugin>
+    </model>
+
+    <!-- ===================== BOI CANH TINH (nha, cay, thung hang) ===================== -->
+    <model name="building_1">
+      <static>true</static>
+      <pose>-16 14 5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>6 8 10</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>6 8 10</size></box></geometry>
+          <material><ambient>0.55 0.55 0.58 1</ambient><diffuse>0.55 0.55 0.58 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="building_2">
+      <static>true</static>
+      <pose>-16 -14 3.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>5 6 7</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>5 6 7</size></box></geometry>
+          <material><ambient>0.72 0.62 0.48 1</ambient><diffuse>0.72 0.62 0.48 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tree_1">
+      <static>true</static>
+      <pose>0 12 0 0 0 0</pose>
+      <link name="link">
+        <collision name="trunk_col"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry></collision>
+        <visual name="trunk"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry>
+          <material><ambient>0.35 0.23 0.12 1</ambient><diffuse>0.35 0.23 0.12 1</diffuse></material></visual>
+        <visual name="leaf"><pose>0 0 3.0 0 0 0</pose>
+          <geometry><sphere><radius>1.4</radius></sphere></geometry>
+          <material><ambient>0.15 0.42 0.15 1</ambient><diffuse>0.15 0.42 0.15 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="tree_2">
+      <static>true</static>
+      <pose>30 12 0 0 0 0</pose>
+      <link name="link">
+        <collision name="trunk_col"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry></collision>
+        <visual name="trunk"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry>
+          <material><ambient>0.35 0.23 0.12 1</ambient><diffuse>0.35 0.23 0.12 1</diffuse></material></visual>
+        <visual name="leaf"><pose>0 0 3.0 0 0 0</pose>
+          <geometry><sphere><radius>1.4</radius></sphere></geometry>
+          <material><ambient>0.16 0.45 0.14 1</ambient><diffuse>0.16 0.45 0.14 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="tree_3">
+      <static>true</static>
+      <pose>-14 0 0 0 0 0</pose>
+      <link name="link">
+        <collision name="trunk_col"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry></collision>
+        <visual name="trunk"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry>
+          <material><ambient>0.35 0.23 0.12 1</ambient><diffuse>0.35 0.23 0.12 1</diffuse></material></visual>
+        <visual name="leaf"><pose>0 0 3.0 0 0 0</pose>
+          <geometry><sphere><radius>1.4</radius></sphere></geometry>
+          <material><ambient>0.14 0.40 0.16 1</ambient><diffuse>0.14 0.40 0.16 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="tree_4">
+      <static>true</static>
+      <pose>32 -6 0 0 0 0</pose>
+      <link name="link">
+        <collision name="trunk_col"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry></collision>
+        <visual name="trunk"><pose>0 0 1.2 0 0 0</pose>
+          <geometry><cylinder><radius>0.18</radius><length>2.4</length></cylinder></geometry>
+          <material><ambient>0.35 0.23 0.12 1</ambient><diffuse>0.35 0.23 0.12 1</diffuse></material></visual>
+        <visual name="leaf"><pose>0 0 3.0 0 0 0</pose>
+          <geometry><sphere><radius>1.4</radius></sphere></geometry>
+          <material><ambient>0.15 0.42 0.15 1</ambient><diffuse>0.15 0.42 0.15 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="crate_1">
+      <static>true</static>
+      <pose>34 2 0.5 0 0 0.4</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>1 1 1</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 1</size></box></geometry>
+          <material><ambient>0.6 0.45 0.2 1</ambient><diffuse>0.6 0.45 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="crate_2">
+      <static>true</static>
+      <pose>-2 -11 0.5 0 0 -0.3</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>1 1 1</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 1</size></box></geometry>
+          <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- optional_iris: bo comment khoi duoi de spawn Iris that ngay trong world
+         (can GZ_SIM_RESOURCE_PATH tro toi thu muc ardupilot_gazebo/models)
+    <include>
+      <uri>model://iris_with_gimbal</uri>
+      <name>iris</name>
+      <pose>0 0 0.45 0 0 0</pose>
+    </include>
+    -->
+
+  </world>
+</sdf>
